@@ -1,6 +1,6 @@
 - 👋 Hi, I’m @IrinaUM
 - 👀 I’m interested in NLP
-- 🌱 I’m currently learning Practical Machine Learning Course 
+- 🌱 I’m currently learning Practical Machine Learning Course on Coursera
 
 <!---
 IrinaUM/IrinaUM is a ✨ special ✨ repository because its `README.md` (this file) appears on your GitHub profile.
