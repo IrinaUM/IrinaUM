@@ -1,0 +1,234 @@
+---
+title: "CourseraMachineLearningFinalProject"
+author: "Irina Ualiyeva"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Practical Machine Learning Course - Final Project
+
+#### Irina Ualiyeva
+
+#### 05/20/2022
+
+## Background
+
+This is a final project of Coursera's Practical Machine Learning Course by Johns Hopkins University. In this project, we are given data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. Our goal is to apply the best machine learning algorithm to the 20 test cases available in the test data. We train three baseline machine learning algorithms: Random Forest, SVM, Gradient Boosted Trees. The most successful result was obtained from Random Forest algorithm with 95% on the 20 testing data point.
+
+## Data
+
+The training data for this project are available here: <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>. The test data are available here: <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>. The data for this project come from this source: <http://groupware.les.inf.puc-rio.br/har>.
+
+## Loading libraries
+
+```{r library}
+
+library(caret)
+library(readr)
+library(lattice)
+library(ggplot2)
+library(corrplot)
+```
+
+## Loading Data
+
+```{r load_data}
+
+pml_training <- read_csv("datasets/pml-training.csv")
+pml_testing <- read_csv("datasets/pml-testing.csv")
+```
+
+## Data Preprocessing
+
+```{r dim_data}
+
+dim(pml_training)
+dim(pml_testing)
+```
+
+We see that there are 160 variables and 19622 observations in the training set, while 20 for the test set. Next step is to remove predictors with nearly zero variance, NAN, predictors that do not intuitive sense for prediction and correlated with each other.
+
+```{r clean_data}
+
+#Removing near zero variance variables
+nzv <- nearZeroVar(pml_training)
+training <- pml_training[, -nzv]
+```
+
+```{r clean_data}
+
+#Removing NA variables
+training <- training[, colSums(is.na(training))==0]
+
+#Removing first six features
+training <- training[, -(1:6)]
+
+dim(training)
+```
+
+```{r corr}
+
+x <- training[,-53]
+
+M <- abs(cor(x))
+diag(M) <- 0
+which(M > 0.8,arr.ind=T)
+
+highlyCorDescr <- findCorrelation(M, cutoff = 0.8)
+x <- x[,-highlyCorDescr]
+```
+
+Now we form new training dataset with 39 predictors and 19622 records, and define targeted variable "classe" as factor variable, other predictors as dataframe.
+
+```{r trainframe_data}
+
+dim(x)
+Y <- training$classe
+Y <- as.matrix(Y)
+trainframe <- data.frame(x, as.factor(Y))
+```
+
+## Modeling
+
+### Splitting training data
+
+Split the training data into training and testing data.
+
+```{r split}
+
+set.seed(32323)
+
+inTrain <- createDataPartition(y=trainframe$as.factor.Y., p=0.75, list=F)
+train <- trainframe[inTrain, ]
+test <- trainframe[-inTrain, ]
+
+dim(train)
+dim(test)
+```
+
+### Modeling
+
+We train three baseline machine learning algorithms: Gradient Boosted Trees, Random Forest and Decision Trees. Instruct train to use 4-fold CV to select optimal tuning parameters. 4-fold CV because in the scientific article 4-fold CV shows the best result.
+
+```{r fit}
+
+fitControl <- trainControl(method="cv", number=4, verboseIter=F)
+```
+
+#### Decision Trees
+
+```{r rpart}
+set.seed(123)
+
+# Build Decision Trees Model
+rpart_model <- caret::train(as.factor.Y. ~., train, method="rpart", trControl = fitControl)
+
+# Predict Decision Trees Model on the validation data
+rpart_predict <- predict(rpart_model, test)
+
+#Accuracy
+confusionMatrix(rpart_predict, factor(test$as.factor.Y.))
+```
+
+#### **Gradient Boosted Trees**
+
+```{r gbm}
+set.seed(123)
+
+# Build Gradient Boosted Trees Model
+gbm_model <- caret::train(as.factor.Y. ~., train, method="gbm", trControl = fitControl)
+
+# Predict Gradient Boosted Trees Model on the validation data
+gbm_predict <- predict(gbm_model, test)
+
+#Accuracy
+confusionMatrix(gbm_predict,  factor(test$as.factor.Y.))
+```
+
+#### Random Forest
+
+```{r rf}
+
+set.seed(123)
+
+# Build Random Forest Model
+rf_model <- caret::train(as.factor.Y. ~., train, method="rf", trControl = fitControl, tuneLength = 5, verbose = F)
+
+# Predict Random Forest Model on the validation data
+rf_predict <- predict(rf_model, test)
+
+#Accuracy
+confusionMatrix(rf_predict,  factor(test$as.factor.Y.))
+```
+
+## Prediction on Validation Data
+
+Last step is the prediction a target variable "classe" for each of the 20 observations from validation data ("pml-testing.csv" file). We use best model for prediction. Before prediction we clean validation data.
+
+```{r clean_validation_data}
+
+#Removing zero variance variables
+nzv <- nearZeroVar(pml_testing)
+validation <- pml_testing[, -nzv]
+
+#Removing NA variables
+validation <- validation[, colSums(is.na(validation))==0]
+
+#Removing first six features
+validation <- validation[, -(1:6)]
+
+dim(validation)
+```
+
+#### Result
+
+```{r pred}
+
+answers = c("B", "A", "B", "A", "A", "E", "D", "B", "A", "A", "A", "C", "B", 
+    "A", "E", "E", "A", "B", "B", "B")
+
+pred <- predict(rf_model, validation)
+
+table_pred <- table(answers, pred)
+table_pred
+```
+
+So here we obtain final answers and can see that we have only one error in prediction of "A" classe, that give as 95% of prediction on validation data with Random Forests model.
+
+# **Appendix**
+
+Correlation matrix of variables in training data
+
+```{r corr_plot}
+## Loading required package corrplot
+
+corrPlot <- cor(x[1:20])
+corrplot(corrPlot, method = 'color')
+```
+
+We may take only 20 important features for prediction
+
+```{r featureImportance}
+library(gbm)
+
+varImp(gbm_model)
+plot(varImp(gbm_model))
+```
+
+Plotting the models:
+
+```{r rfplot, echo=FALSE}
+plot(rf_model)
+```
+
+```{r rpartplot, echo=FALSE}
+plot(rpart_model)
+```
+
+```{r gbm_plot, echo=FALSE}
+plot(gbm_model)
+```
